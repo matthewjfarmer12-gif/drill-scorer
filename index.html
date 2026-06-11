@@ -1,0 +1,641 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Drill Scorer</title>
+<style>
+  :root {
+    --bg: #f4f4f6;
+    --card: #ffffff;
+    --ink: #1c1c1e;
+    --muted: #8e8e93;
+    --accent: #8C1515;
+    --accent-soft: #f6e9e9;
+    --green: #1f8a3b;
+    --green-soft: #e7f4ea;
+    --red: #c0392b;
+    --red-soft: #f9e9e7;
+    --line: #e4e4e8;
+    --radius: 16px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    overscroll-behavior: none;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  input { -webkit-user-select: text; user-select: text; }
+
+  .screen { display: none; min-height: 100%; padding: calc(env(safe-area-inset-top) + 16px) 16px calc(env(safe-area-inset-bottom) + 96px); max-width: 560px; margin: 0 auto; }
+  .screen.active { display: block; }
+
+  h1 { font-size: 28px; font-weight: 800; margin-bottom: 4px; }
+  .subtitle { color: var(--muted); font-size: 15px; margin-bottom: 20px; }
+  h2 { font-size: 17px; font-weight: 700; margin: 22px 0 10px; }
+
+  .btn {
+    display: block; width: 100%; border: none; border-radius: var(--radius);
+    padding: 16px; font-size: 17px; font-weight: 700; font-family: inherit;
+    cursor: pointer; text-align: center;
+  }
+  .btn:active { opacity: .75; }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-secondary { background: var(--card); color: var(--accent); border: 1.5px solid var(--line); }
+  .btn-danger { background: var(--red-soft); color: var(--red); }
+  .btn + .btn { margin-top: 10px; }
+  .btn:disabled { opacity: .35; }
+
+  .card {
+    background: var(--card); border-radius: var(--radius); padding: 14px 16px;
+    margin-bottom: 10px; box-shadow: 0 1px 2px rgba(0,0,0,.05);
+  }
+
+  /* Drill list */
+  .drill-row { display: flex; align-items: center; gap: 12px; cursor: pointer; }
+  .drill-row:active { opacity: .7; }
+  .drill-info { flex: 1; min-width: 0; }
+  .drill-name { font-size: 17px; font-weight: 700; }
+  .drill-chips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
+  .chip {
+    font-size: 13px; font-weight: 700; padding: 3px 9px; border-radius: 999px;
+  }
+  .chip.pos { background: var(--green-soft); color: var(--green); }
+  .chip.neg { background: var(--red-soft); color: var(--red); }
+  .icon-btn {
+    flex: none; width: 40px; height: 40px; border-radius: 12px; border: none;
+    background: var(--bg); color: var(--muted); font-size: 17px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center; font-family: inherit;
+  }
+  .icon-btn:active { opacity: .6; }
+
+  .empty { text-align: center; color: var(--muted); font-size: 15px; padding: 28px 12px; }
+
+  /* Forms */
+  .field-label { font-size: 13px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; margin: 18px 0 8px; }
+  input[type=text], input[type=number], input[type=tel] {
+    width: 100%; border: 1.5px solid var(--line); border-radius: 12px;
+    padding: 13px 14px; font-size: 17px; font-family: inherit; background: var(--card); color: var(--ink);
+  }
+  input:focus { outline: none; border-color: var(--accent); }
+  .player-input { margin-bottom: 8px; }
+
+  .preset-row { display: flex; flex-wrap: wrap; gap: 8px; }
+  .preset {
+    border: 1.5px solid var(--line); background: var(--card); border-radius: 999px;
+    padding: 9px 14px; font-size: 16px; font-weight: 700; font-family: inherit; cursor: pointer;
+  }
+  .preset.pos { color: var(--green); }
+  .preset.neg { color: var(--red); }
+  .preset:active { background: var(--bg); }
+
+  .selected-buttons { display: flex; flex-wrap: wrap; gap: 8px; min-height: 42px; }
+  .sel-chip {
+    display: flex; align-items: center; gap: 7px; border-radius: 999px;
+    padding: 8px 8px 8px 14px; font-size: 16px; font-weight: 800; border: none; font-family: inherit; cursor: pointer;
+  }
+  .sel-chip.pos { background: var(--green-soft); color: var(--green); }
+  .sel-chip.neg { background: var(--red-soft); color: var(--red); }
+  .sel-chip .x { font-weight: 400; font-size: 14px; opacity: .7; background: rgba(0,0,0,.07); border-radius: 999px; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; }
+
+  .custom-row { display: flex; gap: 8px; margin-top: 10px; }
+  .custom-row input { flex: 1; }
+  .custom-row .btn { width: auto; padding: 13px 18px; margin: 0; font-size: 16px; }
+
+  /* Live screen */
+  .live-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 14px; }
+  .live-title { font-size: 21px; font-weight: 800; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pill-btn {
+    border: none; border-radius: 999px; padding: 9px 16px; font-size: 15px; font-weight: 700;
+    font-family: inherit; cursor: pointer; flex: none;
+  }
+  .pill-undo { background: var(--card); color: var(--ink); border: 1.5px solid var(--line); }
+  .pill-end { background: var(--accent); color: #fff; }
+  .pill-btn:active { opacity: .7; }
+  .pill-btn:disabled { opacity: .35; }
+
+  .players-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .players-grid.single { grid-template-columns: 1fr; }
+  .player-card { background: var(--card); border-radius: var(--radius); overflow: hidden; box-shadow: 0 1px 2px rgba(0,0,0,.05); }
+  .player-top {
+    width: 100%; border: none; background: none; font-family: inherit; cursor: pointer;
+    padding: 14px 10px 10px; text-align: center;
+  }
+  .player-top:active { background: var(--accent-soft); }
+  .player-name { font-size: 16px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .player-score { font-size: 38px; font-weight: 800; line-height: 1.1; margin-top: 2px; font-variant-numeric: tabular-nums; }
+  .player-score.neg { color: var(--red); }
+  .tap-hint { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .rep-btn {
+    width: 100%; border: none; border-top: 1.5px solid var(--line); background: var(--bg);
+    font-family: inherit; cursor: pointer; padding: 11px 10px;
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    font-size: 15px; font-weight: 700; color: var(--ink);
+  }
+  .rep-btn:active { background: var(--accent-soft); }
+  .rep-count { font-size: 19px; font-weight: 800; color: var(--accent); font-variant-numeric: tabular-nums; }
+  .rep-plus { color: var(--muted); font-weight: 600; font-size: 13px; }
+
+  /* Score sheet */
+  .sheet-backdrop {
+    position: fixed; inset: 0; background: rgba(0,0,0,.4); display: none;
+    align-items: flex-end; justify-content: center; z-index: 50;
+  }
+  .sheet-backdrop.open { display: flex; }
+  .sheet {
+    background: var(--card); width: 100%; max-width: 560px;
+    border-radius: 22px 22px 0 0; padding: 20px 20px calc(env(safe-area-inset-bottom) + 22px);
+  }
+  .sheet-title { font-size: 15px; color: var(--muted); font-weight: 600; text-align: center; }
+  .sheet-player { font-size: 22px; font-weight: 800; text-align: center; margin: 2px 0 16px; }
+  .sheet-buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .score-btn {
+    border: none; border-radius: 14px; padding: 20px 10px; font-size: 26px; font-weight: 800;
+    font-family: inherit; cursor: pointer; font-variant-numeric: tabular-nums;
+  }
+  .score-btn.pos { background: var(--green-soft); color: var(--green); }
+  .score-btn.neg { background: var(--red-soft); color: var(--red); }
+  .score-btn:active { opacity: .6; }
+  .sheet-cancel { margin-top: 14px; background: var(--bg); color: var(--muted); }
+
+  /* History */
+  .hist-row { cursor: pointer; }
+  .hist-head { display: flex; align-items: center; gap: 10px; }
+  .hist-info { flex: 1; min-width: 0; }
+  .hist-name { font-size: 16px; font-weight: 700; }
+  .hist-date { font-size: 13px; color: var(--muted); margin-top: 2px; }
+  .hist-table { width: 100%; margin-top: 12px; border-top: 1px solid var(--line); padding-top: 8px; display: none; }
+  .hist-row.open .hist-table { display: table; }
+  .hist-table td, .hist-table th { padding: 6px 4px; font-size: 15px; text-align: left; }
+  .hist-table th { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; font-weight: 700; }
+  .hist-table td.num { text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .hist-table th.num { text-align: right; }
+
+  /* Summary */
+  .summary-table { width: 100%; }
+  .summary-table td, .summary-table th { padding: 12px 6px; font-size: 17px; text-align: left; border-bottom: 1px solid var(--line); }
+  .summary-table tr:last-child td { border-bottom: none; }
+  .summary-table th { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+  .summary-table .num { text-align: right; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .medal { margin-right: 6px; }
+
+  /* Tabs */
+  .tabbar {
+    position: fixed; bottom: 0; left: 0; right: 0; z-index: 40;
+    background: var(--card); border-top: 1.5px solid var(--line);
+    display: flex; padding-bottom: env(safe-area-inset-bottom);
+  }
+  .tabbar.hidden { display: none; }
+  .tab {
+    flex: 1; border: none; background: none; font-family: inherit; cursor: pointer;
+    padding: 12px 0 10px; font-size: 13px; font-weight: 700; color: var(--muted);
+    display: flex; flex-direction: column; align-items: center; gap: 3px;
+  }
+  .tab .glyph { font-size: 22px; line-height: 1; }
+  .tab.active { color: var(--accent); }
+
+  .back-link { background: none; border: none; color: var(--accent); font-size: 17px; font-weight: 600; font-family: inherit; cursor: pointer; padding: 0; margin-bottom: 14px; }
+
+  /* Confirm dialog */
+  .confirm-backdrop {
+    position: fixed; inset: 0; background: rgba(0,0,0,.4); display: none;
+    align-items: center; justify-content: center; z-index: 70; padding: 24px;
+  }
+  .confirm-backdrop.open { display: flex; }
+  .confirm-box { background: var(--card); border-radius: 18px; padding: 22px 20px; width: 100%; max-width: 340px; }
+  .confirm-msg { font-size: 17px; font-weight: 600; text-align: center; margin-bottom: 18px; line-height: 1.4; }
+  .confirm-actions { display: flex; gap: 10px; }
+  .confirm-actions .btn { margin: 0; flex: 1; padding: 14px; font-size: 16px; }
+
+  .toast {
+    position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom) + 110px); transform: translateX(-50%);
+    background: var(--ink); color: #fff; padding: 10px 18px; border-radius: 999px;
+    font-size: 15px; font-weight: 600; opacity: 0; transition: opacity .25s; pointer-events: none; z-index: 60;
+    white-space: nowrap;
+  }
+  .toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+
+<!-- HOME / DRILLS -->
+<div class="screen active" id="screen-home">
+  <h1>Drill Scorer</h1>
+  <div class="subtitle">Pick a drill to start, or make a new one.</div>
+  <button class="btn btn-primary" onclick="openSetup()">＋ New Drill</button>
+  <h2>My Drills</h2>
+  <div id="drill-list"></div>
+</div>
+
+<!-- HISTORY -->
+<div class="screen" id="screen-history">
+  <h1>History</h1>
+  <div class="subtitle">Past drills saved on this phone.</div>
+  <div id="history-list"></div>
+</div>
+
+<!-- DRILL SETUP -->
+<div class="screen" id="screen-setup">
+  <button class="back-link" onclick="showScreen('home')">‹ Back</button>
+  <h1 id="setup-title">New Drill</h1>
+  <div class="field-label">Drill name</div>
+  <input type="text" id="setup-name" placeholder="e.g. 5m Shooting" maxlength="40">
+  <div class="field-label">Score buttons for this drill</div>
+  <div class="selected-buttons" id="setup-chips"></div>
+  <div class="field-label" style="margin-top:14px">Tap to add</div>
+  <div class="preset-row" id="preset-row"></div>
+  <div class="custom-row">
+    <input type="tel" id="custom-value" placeholder="Custom, e.g. -4 or 10" inputmode="numeric" pattern="-?[0-9]*">
+    <button class="btn btn-secondary" onclick="addCustomButton()">Add</button>
+  </div>
+  <div style="height:24px"></div>
+  <button class="btn btn-primary" onclick="saveDrill()">Save Drill</button>
+</div>
+
+<!-- PLAYER ENTRY -->
+<div class="screen" id="screen-players">
+  <button class="back-link" onclick="showScreen('home')">‹ Back</button>
+  <h1 id="players-title">Who's in?</h1>
+  <div class="subtitle">Enter 1–6 player names.</div>
+  <div id="player-inputs"></div>
+  <div style="height:16px"></div>
+  <button class="btn btn-primary" onclick="startDrill()">Start Drill</button>
+</div>
+
+<!-- LIVE DRILL -->
+<div class="screen" id="screen-live">
+  <div class="live-header">
+    <div class="live-title" id="live-title"></div>
+    <button class="pill-btn pill-undo" id="undo-btn" onclick="undo()">↩ Undo</button>
+    <button class="pill-btn pill-end" onclick="endDrill()">End</button>
+  </div>
+  <div class="players-grid" id="live-grid"></div>
+</div>
+
+<!-- SUMMARY -->
+<div class="screen" id="screen-summary">
+  <h1>Drill Complete</h1>
+  <div class="subtitle" id="summary-sub"></div>
+  <div class="card"><table class="summary-table" id="summary-table"></table></div>
+  <div style="height:10px"></div>
+  <button class="btn btn-primary" onclick="showScreen('home')">Done</button>
+</div>
+
+<!-- SCORE SHEET -->
+<div class="sheet-backdrop" id="sheet" onclick="if(event.target===this)closeSheet()">
+  <div class="sheet">
+    <div class="sheet-title">Add score for</div>
+    <div class="sheet-player" id="sheet-player"></div>
+    <div class="sheet-buttons" id="sheet-buttons"></div>
+    <button class="btn sheet-cancel" onclick="closeSheet()">Cancel</button>
+  </div>
+</div>
+
+<!-- TABS -->
+<div class="tabbar" id="tabbar">
+  <button class="tab active" id="tab-home" onclick="showScreen('home')"><span class="glyph">🏆</span>Drills</button>
+  <button class="tab" id="tab-history" onclick="showScreen('history')"><span class="glyph">🕘</span>History</button>
+</div>
+
+<!-- CONFIRM DIALOG -->
+<div class="confirm-backdrop" id="confirm">
+  <div class="confirm-box">
+    <div class="confirm-msg" id="confirm-msg"></div>
+    <div class="confirm-actions">
+      <button class="btn btn-secondary" id="confirm-no">Cancel</button>
+      <button class="btn btn-primary" id="confirm-yes">Yes</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+'use strict';
+
+// ---------- storage ----------
+function load(key, fallback) {
+  try { const v = JSON.parse(localStorage.getItem(key)); return v === null || v === undefined ? fallback : v; }
+  catch (e) { return fallback; }
+}
+function save(key, value) { localStorage.setItem(key, JSON.stringify(value)); }
+
+let drills  = load('ds.drills', []);    // [{id, name, buttons:[5,3,-2]}]
+let history = load('ds.history', []);   // [{id, drillName, endedAt, players:[{name,score,reps}]}]
+let session = load('ds.session', null); // {drillId, drillName, buttons, players:[{name,score,reps}], undo:[]}
+
+const PRESETS = [1, 2, 3, 5, -1, -2, -3, -5];
+
+// ---------- helpers ----------
+const $ = id => document.getElementById(id);
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function fmtSigned(n) { return n > 0 ? '+' + n : String(n); }
+function toast(msg) {
+  const t = $('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toast._timer);
+  toast._timer = setTimeout(() => t.classList.remove('show'), 1400);
+}
+
+// ---------- confirm dialog ----------
+let confirmYesFn = null;
+function askConfirm(message, yesLabel, onYes) {
+  $('confirm-msg').textContent = message;
+  $('confirm-yes').textContent = yesLabel;
+  confirmYesFn = onYes;
+  $('confirm').classList.add('open');
+}
+$('confirm-no').onclick = () => { $('confirm').classList.remove('open'); confirmYesFn = null; };
+$('confirm-yes').onclick = () => {
+  $('confirm').classList.remove('open');
+  const fn = confirmYesFn;
+  confirmYesFn = null;
+  if (fn) fn();
+};
+
+// ---------- navigation ----------
+function showScreen(name) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  $('screen-' + name).classList.add('active');
+  const tabbar = $('tabbar');
+  tabbar.classList.toggle('hidden', name === 'live' || name === 'setup' || name === 'players');
+  $('tab-home').classList.toggle('active', name === 'home' || name === 'summary');
+  $('tab-history').classList.toggle('active', name === 'history');
+  if (name === 'home') renderDrillList();
+  if (name === 'history') renderHistory();
+  window.scrollTo(0, 0);
+}
+
+// ---------- home / drill list ----------
+function renderDrillList() {
+  const el = $('drill-list');
+  if (!drills.length) {
+    el.innerHTML = '<div class="card empty">No drills yet.<br>Tap “New Drill” to set one up.</div>';
+    return;
+  }
+  el.innerHTML = drills.map(d => `
+    <div class="card drill-row" onclick="openPlayers('${d.id}')">
+      <div class="drill-info">
+        <div class="drill-name">${esc(d.name)}</div>
+        <div class="drill-chips">${d.buttons.map(b =>
+          `<span class="chip ${b >= 0 ? 'pos' : 'neg'}">${fmtSigned(b)}</span>`).join('')}</div>
+      </div>
+      <button class="icon-btn" onclick="event.stopPropagation();openSetup('${d.id}')" aria-label="Edit drill">✎</button>
+      <button class="icon-btn" onclick="event.stopPropagation();deleteDrill('${d.id}')" aria-label="Delete drill">🗑</button>
+    </div>`).join('');
+}
+
+function deleteDrill(id) {
+  const d = drills.find(x => x.id === id);
+  if (!d) return;
+  askConfirm('Delete drill “' + d.name + '”? Past results in History are kept.', 'Delete', () => {
+    drills = drills.filter(x => x.id !== id);
+    save('ds.drills', drills);
+    renderDrillList();
+  });
+}
+
+// ---------- drill setup ----------
+let setupButtons = [];
+let editingId = null;
+
+function openSetup(id) {
+  editingId = id || null;
+  const existing = id ? drills.find(d => d.id === id) : null;
+  setupButtons = existing ? existing.buttons.slice() : [];
+  $('setup-title').textContent = existing ? 'Edit Drill' : 'New Drill';
+  $('setup-name').value = existing ? existing.name : '';
+  $('custom-value').value = '';
+  renderPresets();
+  renderSetupChips();
+  showScreen('setup');
+}
+
+function renderPresets() {
+  $('preset-row').innerHTML = PRESETS.map(v =>
+    `<button class="preset ${v >= 0 ? 'pos' : 'neg'}" onclick="addButton(${v})">${fmtSigned(v)}</button>`).join('');
+}
+
+function renderSetupChips() {
+  const el = $('setup-chips');
+  if (!setupButtons.length) {
+    el.innerHTML = '<span style="color:var(--muted);font-size:15px;align-self:center">None yet — add some below.</span>';
+    return;
+  }
+  el.innerHTML = setupButtons.map((b, i) =>
+    `<button class="sel-chip ${b >= 0 ? 'pos' : 'neg'}" onclick="removeButton(${i})">${fmtSigned(b)}<span class="x">✕</span></button>`).join('');
+}
+
+function addButton(v) {
+  if (setupButtons.includes(v)) { toast(fmtSigned(v) + ' is already added'); return; }
+  if (setupButtons.length >= 8) { toast('Max 8 buttons per drill'); return; }
+  setupButtons.push(v);
+  setupButtons.sort((a, b) => b - a);
+  renderSetupChips();
+}
+
+function removeButton(i) { setupButtons.splice(i, 1); renderSetupChips(); }
+
+function addCustomButton() {
+  const raw = $('custom-value').value.trim();
+  const v = parseInt(raw, 10);
+  if (!raw || isNaN(v) || v === 0 || Math.abs(v) > 99) { toast('Enter a number like 4 or -4'); return; }
+  $('custom-value').value = '';
+  addButton(v);
+}
+
+function saveDrill() {
+  const name = $('setup-name').value.trim();
+  if (!name) { toast('Give the drill a name'); return; }
+  if (!setupButtons.length) { toast('Add at least one score button'); return; }
+  if (editingId) {
+    const d = drills.find(x => x.id === editingId);
+    d.name = name;
+    d.buttons = setupButtons.slice();
+  } else {
+    drills.unshift({ id: 'd' + Date.now(), name, buttons: setupButtons.slice() });
+  }
+  save('ds.drills', drills);
+  showScreen('home');
+  toast('Drill saved');
+}
+
+// ---------- player entry ----------
+let pendingDrillId = null;
+
+function openPlayers(id) {
+  const d = drills.find(x => x.id === id);
+  if (!d) return;
+  pendingDrillId = id;
+  $('players-title').textContent = d.name;
+  $('player-inputs').innerHTML = Array.from({ length: 6 }, (_, i) =>
+    `<input type="text" class="player-input" id="pname-${i}" placeholder="Player ${i + 1}${i === 0 ? '' : ' (optional)'}" maxlength="24" autocomplete="off">`).join('');
+  showScreen('players');
+}
+
+function startDrill() {
+  const d = drills.find(x => x.id === pendingDrillId);
+  if (!d) return;
+  const names = [];
+  for (let i = 0; i < 6; i++) {
+    const v = $('pname-' + i).value.trim();
+    if (v) names.push(v);
+  }
+  if (!names.length) { toast('Enter at least one player'); return; }
+  session = {
+    drillId: d.id,
+    drillName: d.name,
+    buttons: d.buttons.slice(),
+    startedAt: Date.now(),
+    players: names.map(n => ({ name: n, score: 0, reps: 0 })),
+    undo: []
+  };
+  save('ds.session', session);
+  openLive();
+}
+
+// ---------- live drill ----------
+function openLive() {
+  $('live-title').textContent = session.drillName;
+  renderLive();
+  showScreen('live');
+}
+
+function renderLive() {
+  const grid = $('live-grid');
+  grid.classList.toggle('single', session.players.length === 1);
+  grid.innerHTML = session.players.map((p, i) => `
+    <div class="player-card">
+      <button class="player-top" onclick="openSheet(${i})">
+        <div class="player-name">${esc(p.name)}</div>
+        <div class="player-score ${p.score < 0 ? 'neg' : ''}">${p.score}</div>
+        <div class="tap-hint">tap to score</div>
+      </button>
+      <button class="rep-btn" onclick="addRep(${i})">
+        Reps <span class="rep-count">${p.reps}</span> <span class="rep-plus">tap +1</span>
+      </button>
+    </div>`).join('');
+  $('undo-btn').disabled = !session.undo.length;
+}
+
+function addRep(i) {
+  session.players[i].reps += 1;
+  session.undo.push({ p: i, type: 'rep' });
+  save('ds.session', session);
+  renderLive();
+}
+
+let sheetPlayer = null;
+function openSheet(i) {
+  sheetPlayer = i;
+  $('sheet-player').textContent = session.players[i].name;
+  $('sheet-buttons').innerHTML = session.buttons.map(b =>
+    `<button class="score-btn ${b >= 0 ? 'pos' : 'neg'}" onclick="applyScore(${b})">${fmtSigned(b)}</button>`).join('');
+  $('sheet').classList.add('open');
+}
+function closeSheet() { $('sheet').classList.remove('open'); sheetPlayer = null; }
+
+function applyScore(v) {
+  if (sheetPlayer === null) return;
+  const p = session.players[sheetPlayer];
+  p.score += v;
+  session.undo.push({ p: sheetPlayer, type: 'score', value: v });
+  save('ds.session', session);
+  closeSheet();
+  renderLive();
+  toast(fmtSigned(v) + ' ' + p.name);
+}
+
+function undo() {
+  const last = session.undo.pop();
+  if (!last) return;
+  const p = session.players[last.p];
+  if (last.type === 'rep') { p.reps = Math.max(0, p.reps - 1); toast('Undid rep for ' + p.name); }
+  else { p.score -= last.value; toast('Undid ' + fmtSigned(last.value) + ' for ' + p.name); }
+  save('ds.session', session);
+  renderLive();
+}
+
+function endDrill() {
+  askConfirm('End this drill and save the results?', 'End & Save', () => {
+    const entry = {
+      id: 'h' + Date.now(),
+      drillName: session.drillName,
+      endedAt: Date.now(),
+      players: session.players.map(p => ({ name: p.name, score: p.score, reps: p.reps }))
+    };
+    history.unshift(entry);
+    save('ds.history', history);
+    session = null;
+    save('ds.session', null);
+    showSummary(entry);
+  });
+}
+
+// ---------- summary ----------
+function showSummary(entry) {
+  $('summary-sub').textContent = entry.drillName + ' · ' + new Date(entry.endedAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
+  const ranked = entry.players.slice().sort((a, b) => b.score - a.score);
+  const medals = ['🥇', '🥈', '🥉'];
+  $('summary-table').innerHTML =
+    '<tr><th>Player</th><th class="num">Score</th><th class="num">Reps</th></tr>' +
+    ranked.map((p, i) =>
+      `<tr><td><span class="medal">${medals[i] || ''}</span>${esc(p.name)}</td><td class="num">${p.score}</td><td class="num">${p.reps}</td></tr>`).join('');
+  showScreen('summary');
+}
+
+// ---------- history ----------
+function renderHistory() {
+  const el = $('history-list');
+  if (!history.length) {
+    el.innerHTML = '<div class="card empty">No drills finished yet.<br>Results show up here after you end a drill.</div>';
+    return;
+  }
+  el.innerHTML = history.map(h => {
+    const ranked = h.players.slice().sort((a, b) => b.score - a.score);
+    return `
+    <div class="card hist-row" id="hist-${h.id}" onclick="toggleHist('${h.id}')">
+      <div class="hist-head">
+        <div class="hist-info">
+          <div class="hist-name">${esc(h.drillName)}</div>
+          <div class="hist-date">${new Date(h.endedAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })} · ${h.players.length} player${h.players.length > 1 ? 's' : ''}</div>
+        </div>
+        <button class="icon-btn" onclick="event.stopPropagation();deleteHist('${h.id}')" aria-label="Delete result">🗑</button>
+      </div>
+      <table class="hist-table">
+        <tr><th>Player</th><th class="num">Score</th><th class="num">Reps</th></tr>
+        ${ranked.map(p => `<tr><td>${esc(p.name)}</td><td class="num">${p.score}</td><td class="num">${p.reps}</td></tr>`).join('')}
+      </table>
+    </div>`;
+  }).join('');
+}
+
+function toggleHist(id) { $('hist-' + id).classList.toggle('open'); }
+
+function deleteHist(id) {
+  askConfirm('Delete this result?', 'Delete', () => {
+    history = history.filter(h => h.id !== id);
+    save('ds.history', history);
+    renderHistory();
+  });
+}
+
+// ---------- boot ----------
+if (session && session.players && session.players.length) {
+  openLive(); // resume an unfinished drill (e.g. after accidental refresh)
+} else {
+  session = null;
+  showScreen('home');
+}
+</script>
+</body>
+</html>
