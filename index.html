@@ -105,8 +105,15 @@
   .sel-chip .x { font-weight: 400; font-size: 14px; opacity: .7; background: rgba(0,0,0,.07); border-radius: 999px; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; }
 
   .custom-row { display: flex; gap: 8px; margin-top: 10px; }
-  .custom-row input { flex: 1; }
+  .custom-row input { flex: 1; min-width: 0; }
   .custom-row .btn { width: auto; padding: 13px 18px; margin: 0; font-size: 16px; }
+  .sign-toggle {
+    flex: none; width: 54px; border: 1.5px solid var(--line); border-radius: 12px;
+    background: var(--card); font-size: 24px; font-weight: 800; font-family: inherit; cursor: pointer;
+  }
+  .sign-toggle.pos { color: var(--green); }
+  .sign-toggle.neg { color: var(--red); border-color: var(--red); background: var(--red-soft); }
+  .sign-toggle:active { opacity: .6; }
 
   /* Live screen */
   .live-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 14px; }
@@ -251,7 +258,8 @@
   <div class="field-label" style="margin-top:14px">Tap to add</div>
   <div class="preset-row" id="preset-row"></div>
   <div class="custom-row">
-    <input type="tel" id="custom-value" placeholder="Custom, e.g. -4 or 10" inputmode="numeric" pattern="-?[0-9]*">
+    <button class="sign-toggle pos" id="sign-toggle" onclick="toggleSign()" aria-label="Switch between plus and minus">＋</button>
+    <input type="tel" id="custom-value" placeholder="Custom, e.g. 4" inputmode="numeric" pattern="[0-9]*">
     <button class="btn btn-secondary" onclick="addCustomButton()">Add</button>
   </div>
   <div style="height:24px"></div>
@@ -415,6 +423,7 @@ function openSetup(id) {
   $('setup-title').textContent = existing ? 'Edit Drill' : 'New Drill';
   $('setup-name').value = existing ? existing.name : '';
   $('custom-value').value = '';
+  if (customSign < 0) toggleSign(); // reset to ＋
   renderPresets();
   renderSetupChips();
   showScreen('setup');
@@ -445,12 +454,22 @@ function addButton(v) {
 
 function removeButton(i) { setupButtons.splice(i, 1); renderSetupChips(); }
 
+let customSign = 1;
+function toggleSign() {
+  customSign = -customSign;
+  const t = $('sign-toggle');
+  t.textContent = customSign > 0 ? '＋' : '−';
+  t.classList.toggle('pos', customSign > 0);
+  t.classList.toggle('neg', customSign < 0);
+}
+
 function addCustomButton() {
   const raw = $('custom-value').value.trim();
-  const v = parseInt(raw, 10);
-  if (!raw || isNaN(v) || v === 0 || Math.abs(v) > 99) { toast('Enter a number like 4 or -4'); return; }
+  const typedMinus = raw.startsWith('-'); // a typed minus (e.g. desktop keyboard) still wins
+  const n = parseInt(raw.replace(/[^0-9]/g, ''), 10);
+  if (!raw || isNaN(n) || n === 0 || n > 99) { toast('Enter a number from 1 to 99'); return; }
   $('custom-value').value = '';
-  addButton(v);
+  addButton((typedMinus ? -1 : customSign) * n);
 }
 
 function saveDrill() {
