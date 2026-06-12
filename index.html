@@ -155,6 +155,39 @@
   .rep-adj.plus { color: var(--green); border-left: 1.5px solid var(--line); }
   .rep-adj:active { background: var(--accent-soft); }
 
+  /* Shot clock panel */
+  .clock-card {
+    background: #1c1c1e; border-radius: var(--radius); padding: 12px 14px;
+    margin-bottom: 12px; display: flex; flex-direction: column; gap: 10px;
+  }
+  .clock-top { display: flex; align-items: center; gap: 8px; }
+  .clock-dot { width: 9px; height: 9px; border-radius: 50%; background: #c0392b; flex: none; }
+  .clock-dot.on { background: #2ecc71; }
+  .clock-lbl { font-size: 12px; font-weight: 800; letter-spacing: .06em; color: #8e8e93; }
+  .clock-status { font-size: 12px; color: #8e8e93; flex: 1; }
+  .clock-secs {
+    font-size: 36px; font-weight: 800; color: #f1c40f; line-height: 1;
+    font-variant-numeric: tabular-nums; min-width: 58px; text-align: right;
+  }
+  .clock-btns { display: flex; gap: 8px; }
+  .cbtn {
+    border: none; border-radius: 10px; padding: 13px 0; font-family: inherit;
+    font-weight: 800; font-size: 14px; cursor: pointer; flex: 1; color: #fff;
+  }
+  .cbtn:active { opacity: .65; }
+  .cbtn-start { background: var(--green); }
+  .cbtn-stop { background: var(--red); }
+  .cbtn-reset { background: #2c2c2e; border: 1px solid #48484a; }
+  .cbtn-rand { background: var(--accent); }
+  .cbtn-gear { flex: none; width: 46px; background: #2c2c2e; border: 1px solid #48484a; font-size: 16px; }
+  .clock-settings { display: none; align-items: center; gap: 8px; color: #d1d1d6; font-size: 14px; font-weight: 600; flex-wrap: wrap; }
+  .clock-settings.open { display: flex; }
+  .clock-settings input {
+    width: 60px; background: #2c2c2e; border: 1px solid #48484a; color: #fff;
+    border-radius: 8px; padding: 9px 4px; font-size: 17px; text-align: center; font-family: inherit;
+  }
+  .clock-settings input:focus { border-color: #f1c40f; outline: none; }
+
   /* Score sheet */
   .sheet-backdrop {
     position: fixed; inset: 0; background: rgba(0,0,0,.4); display: none;
@@ -288,6 +321,27 @@
     <div class="live-title" id="live-title"></div>
     <button class="pill-btn pill-undo" id="undo-btn" onclick="undo()">↩ Undo</button>
     <button class="pill-btn pill-end" onclick="endDrill()">End</button>
+  </div>
+  <div class="clock-card">
+    <div class="clock-top">
+      <span class="clock-dot" id="clock-dot"></span>
+      <span class="clock-lbl">SHOT CLOCK</span>
+      <span class="clock-status" id="clock-status">connecting…</span>
+      <span class="clock-secs" id="clock-secs">–</span>
+    </div>
+    <div class="clock-btns">
+      <button class="cbtn cbtn-start" id="clock-toggle" onclick="clockCmd('toggle')">START</button>
+      <button class="cbtn cbtn-reset" onclick="clockCmd('shot30')">30</button>
+      <button class="cbtn cbtn-rand" id="clock-rand" onclick="clockRandom()">🎲 10–20</button>
+      <button class="cbtn cbtn-gear" onclick="document.getElementById('clock-settings').classList.toggle('open')">⚙</button>
+    </div>
+    <div class="clock-settings" id="clock-settings">
+      Random between
+      <input type="tel" id="rand-min" inputmode="numeric" onchange="saveRandWindow()">
+      and
+      <input type="tel" id="rand-max" inputmode="numeric" onchange="saveRandWindow()">
+      seconds
+    </div>
   </div>
   <div class="players-grid" id="live-grid"></div>
 </div>
@@ -528,9 +582,94 @@ function startDrill() {
   openLive();
 }
 
+// ---------- shot clock remote (Stanford Scout Hub clock) ----------
+// The pool scoreboard at stanford-swim-clock.onrender.com syncs all displays
+// and remotes through one broadcast WebSocket; this panel is just another remote.
+const CLOCK_WS_URL = 'wss://stanford-swim-clock.onrender.com';
+let clockWS = null;
+let clockReady = false;        // connected to the relay server
+let clockLastState = 0;        // last time the display broadcast its state
+let clockRunning = false;
+
+function clockConnect() {
+  if (clockWS) return;
+  try {
+    clockWS = new WebSocket(CLOCK_WS_URL);
+    clockWS.onopen = () => { clockReady = true; renderClockConn(); };
+    clockWS.onmessage = (e) => {
+      let m;
+      try { m = JSON.parse(e.data); } catch (x) { return; }
+      if (m.type !== 'state') return;
+      clockLastState = performance.now();
+      clockRunning = !!m.running;
+      $('clock-secs').textContent = Math.max(0, Math.ceil(m.shotTime / 1000));
+      const b = $('clock-toggle');
+      b.textContent = clockRunning ? 'STOP' : 'START';
+      b.className = 'cbtn ' + (clockRunning ? 'cbtn-stop' : 'cbtn-start');
+      renderClockConn();
+    };
+    clockWS.onclose = () => {
+      clockWS = null; clockReady = false; renderClockConn();
+      setTimeout(clockConnect, 3000);
+    };
+    clockWS.onerror = () => { try { clockWS.close(); } catch (x) {} };
+  } catch (e) {
+    clockWS = null;
+    setTimeout(clockConnect, 5000);
+  }
+}
+
+function renderClockConn() {
+  // The display heartbeats state every 1s; silence >6s means no display is up
+  const displayUp = clockLastState && (performance.now() - clockLastState < 6000);
+  $('clock-dot').classList.toggle('on', clockReady && displayUp);
+  $('clock-status').textContent = !clockReady ? 'connecting…'
+    : displayUp ? 'connected'
+    : 'no clock display open';
+  if (!displayUp) $('clock-secs').textContent = '–';
+}
+setInterval(renderClockConn, 2000);
+
+function clockCmd(action, data) {
+  if (!clockReady) { toast('Shot clock not connected'); return; }
+  clockWS.send(JSON.stringify({ type: 'cmd', action: action, data: data || {} }));
+}
+
+function getRandWindow() {
+  const w = load('ds.randwin', { min: 10, max: 20 });
+  return { min: w.min, max: w.max };
+}
+
+function clockRandom() {
+  const w = getRandWindow();
+  const secs = w.min + Math.floor(Math.random() * (w.max - w.min + 1));
+  clockCmd('setShot', { ms: secs * 1000 });
+  if (clockReady) toast('Shot clock → ' + secs + 's');
+}
+
+function saveRandWindow() {
+  let min = parseInt($('rand-min').value, 10);
+  let max = parseInt($('rand-max').value, 10);
+  if (isNaN(min) || min < 1) min = 1;
+  if (isNaN(max) || max < 1) max = 1;
+  min = Math.min(min, 30); max = Math.min(max, 30);
+  if (min > max) { const t = min; min = max; max = t; }
+  save('ds.randwin', { min, max });
+  renderRandWindow();
+}
+
+function renderRandWindow() {
+  const w = getRandWindow();
+  $('rand-min').value = w.min;
+  $('rand-max').value = w.max;
+  $('clock-rand').textContent = '🎲 ' + w.min + '–' + w.max;
+}
+
 // ---------- live drill ----------
 function openLive() {
   $('live-title').textContent = session.drillName;
+  renderRandWindow();
+  clockConnect();
   renderLive();
   showScreen('live');
 }
