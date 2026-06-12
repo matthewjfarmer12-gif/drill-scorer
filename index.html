@@ -6,6 +6,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>Drill Scorer</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
   :root {
     --bg: #f4f4f6;
@@ -583,39 +584,55 @@ function startDrill() {
 }
 
 // ---------- shot clock remote (Stanford Scout Hub clock) ----------
-// The pool scoreboard at stanford-swim-clock.onrender.com syncs all displays
-// and remotes through one broadcast WebSocket; this panel is just another remote.
-const CLOCK_WS_URL = 'wss://stanford-swim-clock.onrender.com';
-let clockWS = null;
-let clockReady = false;        // connected to the relay server
+// The pool scoreboard (smwphub.com/tools/swim-waterpolo.html) syncs displays,
+// TVs, and remotes over a Supabase Realtime broadcast channel. The display
+// page is the engine: remotes broadcast 'cmd', the display executes and
+// broadcasts 'state' back. This panel is just another remote.
+const SB_URL = 'https://mtkovmvsqxollwnkevti.supabase.co';
+const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im10a292bXZzcXhvbGx3bmtldnRpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE3ODIzMTgsImV4cCI6MjA4NzM1ODMxOH0.zEHkmYW3Ake_wVs2ODTIj10cva3-Spmej-JRMB_RL_w';
+const SB_CHANNEL = 'wp-scoreboard';
+
+let sbClient = null;
+let sbChannel = null;
+let clockReady = false;        // subscribed to the broadcast channel
 let clockLastState = 0;        // last time the display broadcast its state
 let clockRunning = false;
+let clockStarted = false;
 
 function clockConnect() {
-  if (clockWS) return;
+  if (clockStarted) return;
+  clockStarted = true;
+  connectClockChannel();
+}
+
+function connectClockChannel() {
   try {
-    clockWS = new WebSocket(CLOCK_WS_URL);
-    clockWS.onopen = () => { clockReady = true; renderClockConn(); };
-    clockWS.onmessage = (e) => {
-      let m;
-      try { m = JSON.parse(e.data); } catch (x) { return; }
-      if (m.type !== 'state') return;
-      clockLastState = performance.now();
-      clockRunning = !!m.running;
-      $('clock-secs').textContent = Math.max(0, Math.ceil(m.shotTime / 1000));
-      const b = $('clock-toggle');
-      b.textContent = clockRunning ? 'STOP' : 'START';
-      b.className = 'cbtn ' + (clockRunning ? 'cbtn-stop' : 'cbtn-start');
-      renderClockConn();
-    };
-    clockWS.onclose = () => {
-      clockWS = null; clockReady = false; renderClockConn();
-      setTimeout(clockConnect, 3000);
-    };
-    clockWS.onerror = () => { try { clockWS.close(); } catch (x) {} };
+    if (!window.supabase) { setTimeout(connectClockChannel, 1500); return; }
+    if (!sbClient) sbClient = window.supabase.createClient(SB_URL, SB_KEY);
+    if (sbChannel) { try { sbClient.removeChannel(sbChannel); } catch (e) {} }
+    sbChannel = sbClient.channel(SB_CHANNEL, { config: { broadcast: { self: false } } });
+    sbChannel
+      .on('broadcast', { event: 'state' }, (payload) => {
+        const s = payload.payload || {};
+        clockLastState = performance.now();
+        clockRunning = !!s.running;
+        $('clock-secs').textContent = Math.max(0, Math.ceil((s.shotTime || 0) / 1000));
+        const b = $('clock-toggle');
+        b.textContent = clockRunning ? 'STOP' : 'START';
+        b.className = 'cbtn ' + (clockRunning ? 'cbtn-stop' : 'cbtn-start');
+        renderClockConn();
+      })
+      .subscribe((status) => {
+        clockReady = (status === 'SUBSCRIBED');
+        renderClockConn();
+        // supabase-js auto-reconnects most drops; force a clean rejoin on
+        // terminal states so a flaky pool network can't strand us
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+          setTimeout(() => { if (!clockReady) connectClockChannel(); }, 2500);
+        }
+      });
   } catch (e) {
-    clockWS = null;
-    setTimeout(clockConnect, 5000);
+    setTimeout(connectClockChannel, 3000);
   }
 }
 
@@ -632,7 +649,7 @@ setInterval(renderClockConn, 2000);
 
 function clockCmd(action, data) {
   if (!clockReady) { toast('Shot clock not connected'); return; }
-  clockWS.send(JSON.stringify({ type: 'cmd', action: action, data: data || {} }));
+  sbChannel.send({ type: 'broadcast', event: 'cmd', payload: { action: action, data: data || {} } });
 }
 
 function getRandWindow() {
