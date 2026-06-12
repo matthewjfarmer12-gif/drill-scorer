@@ -21,7 +21,9 @@
     --line: #e4e4e8;
     --radius: 16px;
   }
-  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  /* touch-action:manipulation disables iOS double-tap zoom, which otherwise
+     swallows the second of two quick taps (e.g. name -> score button) */
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; touch-action: manipulation; -webkit-touch-callout: none; }
   html, body { height: 100%; }
   body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -139,15 +141,19 @@
   .player-score { font-size: 38px; font-weight: 800; line-height: 1.1; margin-top: 2px; font-variant-numeric: tabular-nums; }
   .player-score.neg { color: var(--red); }
   .tap-hint { font-size: 11px; color: var(--muted); margin-top: 2px; }
-  .rep-btn {
-    width: 100%; border: none; border-top: 1.5px solid var(--line); background: var(--bg);
-    font-family: inherit; cursor: pointer; padding: 11px 10px;
-    display: flex; align-items: center; justify-content: center; gap: 8px;
-    font-size: 15px; font-weight: 700; color: var(--ink);
+  .rep-row { display: flex; align-items: stretch; border-top: 1.5px solid var(--line); background: var(--bg); }
+  .rep-mid {
+    flex: 1; display: flex; align-items: center; justify-content: center; gap: 7px;
+    font-size: 14px; font-weight: 700; color: var(--ink); padding: 12px 4px;
   }
-  .rep-btn:active { background: var(--accent-soft); }
-  .rep-count { font-size: 19px; font-weight: 800; color: var(--accent); font-variant-numeric: tabular-nums; }
-  .rep-plus { color: var(--muted); font-weight: 600; font-size: 13px; }
+  .rep-count { font-size: 20px; font-weight: 800; color: var(--accent); font-variant-numeric: tabular-nums; }
+  .rep-adj {
+    flex: none; width: 52px; border: none; background: none; font-family: inherit; cursor: pointer;
+    font-size: 24px; font-weight: 800; padding: 10px 0;
+  }
+  .rep-adj.minus { color: var(--red); border-right: 1.5px solid var(--line); }
+  .rep-adj.plus { color: var(--green); border-left: 1.5px solid var(--line); }
+  .rep-adj:active { background: var(--accent-soft); }
 
   /* Score sheet */
   .sheet-backdrop {
@@ -539,16 +545,20 @@ function renderLive() {
         <div class="player-score ${p.score < 0 ? 'neg' : ''}">${p.score}</div>
         <div class="tap-hint">tap to score</div>
       </button>
-      <button class="rep-btn" onclick="addRep(${i})">
-        Reps <span class="rep-count">${p.reps}</span> <span class="rep-plus">tap +1</span>
-      </button>
+      <div class="rep-row">
+        <button class="rep-adj minus" onclick="addRep(${i},-1)" aria-label="Subtract rep">−</button>
+        <div class="rep-mid">Reps <span class="rep-count">${p.reps}</span></div>
+        <button class="rep-adj plus" onclick="addRep(${i},1)" aria-label="Add rep">＋</button>
+      </div>
     </div>`).join('');
   $('undo-btn').disabled = !session.undo.length;
 }
 
-function addRep(i) {
-  session.players[i].reps += 1;
-  session.undo.push({ p: i, type: 'rep' });
+function addRep(i, delta) {
+  const p = session.players[i];
+  if (delta < 0 && p.reps === 0) return; // nothing to subtract
+  p.reps += delta;
+  session.undo.push({ p: i, type: 'rep', delta });
   save('ds.session', session);
   renderLive();
 }
@@ -578,7 +588,7 @@ function undo() {
   const last = session.undo.pop();
   if (!last) return;
   const p = session.players[last.p];
-  if (last.type === 'rep') { p.reps = Math.max(0, p.reps - 1); toast('Undid rep for ' + p.name); }
+  if (last.type === 'rep') { p.reps = Math.max(0, p.reps - (last.delta || 1)); toast('Undid rep for ' + p.name); }
   else { p.score -= last.value; toast('Undid ' + fmtSigned(last.value) + ' for ' + p.name); }
   save('ds.session', session);
   renderLive();
